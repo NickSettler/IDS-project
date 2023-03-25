@@ -1,8 +1,8 @@
-DROP TABLE XMOISE01.client;
-DROP VIEW XMOISE01.client_view;
-DROP PROCEDURE XMOISE01.create_client;
+-- DROP TABLE XMOISE01.client;
+-- DROP VIEW XMOISE01.client_view;
+-- DROP PROCEDURE XMOISE01.create_client;
 
-CREATE TABLE XMOISE01.client
+CREATE TABLE client
 (
     passport_number     VARCHAR(16)  NOT NULL PRIMARY KEY,
     first_name          VARCHAR(32)  NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE XMOISE01.client
     CONSTRAINT email_check CHECK (REGEXP_LIKE(email, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'))
 );
 
-CREATE VIEW XMOISE01.client_view AS
+CREATE OR REPLACE VIEW client_view AS
 SELECT passport_number,
        first_name,
        last_name,
@@ -29,9 +29,9 @@ SELECT passport_number,
        phone_number,
        email,
        registration_date
-FROM XMOISE01.client;
+FROM client;
 
-CREATE PROCEDURE XMOISE01.create_client(
+CREATE OR REPLACE PROCEDURE create_client(
     insert_passport_number IN VARCHAR,
     insert_first_name IN VARCHAR,
     insert_last_name IN VARCHAR,
@@ -43,7 +43,7 @@ CREATE PROCEDURE XMOISE01.create_client(
 )
 AS
 BEGIN
-    INSERT INTO XMOISE01.client
+    INSERT INTO client
     VALUES (insert_passport_number,
             insert_first_name,
             insert_last_name,
