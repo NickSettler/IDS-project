@@ -1,15 +1,15 @@
-CREATE TABLE service{
+CREATE TABLE service(
     service_id     INT          NOT NULL PRIMARY KEY,
     service_name   VARCHAR(255) NOT NULL,
     service_price  FLOAT        NOT NULL,
-    service_status VARCHAR(255) NOT NULL,
-    }
+    service_status VARCHAR(255) NOT NULL
+);
 
 CREATE PROCEDURE insert_service (
-    service_id IN INT,
-    service_name IN VARCHAR,
-    service_price IN FLOAT,
-    service_status IN VARCHAR
+    insert_service_id IN INT,
+    insert_service_name IN VARCHAR,
+    insert_service_price IN FLOAT,
+    insert_service_status IN VARCHAR
 )
     AS
 BEGIN
@@ -20,7 +20,7 @@ END;
 -- TESTING DATA
 
 BEGIN
-    insert_service(1, 'Cleaning Room', 10, 'access')
-    insert_service(2, 'Breakfast in the room', 15, 'access')
-    insert_service(3, 'Wake-up call', 1, 'access')
+    insert_service(1, 'Cleaning Room', 10, 'access');
+    insert_service(2, 'Breakfast in the room', 15, 'access');
+    insert_service(3, 'Wake-up call', 1, 'access');
 END;
