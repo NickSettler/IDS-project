@@ -6,9 +6,12 @@ CREATE TABLE suite
 (
     suite_number  INT NOT NULL PRIMARY KEY,
     suite_type_id INT,
+    -- 0 - not available, 1 - available
+    suite_status  SMALLINT DEFAULT 1,
     CONSTRAINT suite_type_id_fk FOREIGN KEY (suite_type_id) REFERENCES suite_type (id)
         ON DELETE SET NULL,
-    CONSTRAINT suite_number_fk CHECK ( suite_number > 1000 AND suite_number < 9999 )
+    CONSTRAINT suite_number_fk CHECK ( suite_number > 1000 AND suite_number < 9999 ),
+    CONSTRAINT suite_status_ck CHECK ( suite_status IN (0, 1))
 );
 
 CREATE VIEW suite_view AS
@@ -27,15 +30,17 @@ FROM suite
 CREATE PROCEDURE insert_suite(insert_number IN INT, insert_type_id IN INT)
     AS
 BEGIN
-    INSERT INTO suite (suite_number, suite_type_id)
-    VALUES (insert_number, insert_type_id);
+INSERT INTO suite (suite_number, suite_type_id)
+VALUES (insert_number, insert_type_id);
 END;
 
 -- INSERTS FOR TESTING
 BEGIN
-    FOR suite_type IN (SELECT * FROM SUITE_TYPE) LOOP
+FOR suite_type IN (SELECT * FROM SUITE_TYPE) LOOP
         insert_suite(suite_type.ID * 1000 + 1, suite_type.ID);
-        insert_suite(suite_type.ID * 1000 + 2, suite_type.ID);
-        insert_suite(suite_type.ID * 1000 + 3, suite_type.ID);
-    END LOOP;
+        insert_suite
+(suite_type.ID * 1000 + 2, suite_type.ID);
+        insert_suite
+(suite_type.ID * 1000 + 3, suite_type.ID);
+END LOOP;
 END;

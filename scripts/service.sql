@@ -1,26 +1,27 @@
-CREATE TABLE service(
-    service_id     INT          NOT NULL PRIMARY KEY,
-    service_name   VARCHAR(255) NOT NULL,
-    service_price  FLOAT        NOT NULL,
-    service_status VARCHAR(255) NOT NULL
+CREATE TABLE service
+(
+    id             INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
+    service_name   VARCHAR(255)                     NOT NULL,
+    service_price  FLOAT                            NOT NULL,
+    service_status SMALLINT                         NOT NULL,
+    CONSTRAINT service_status_check CHECK (service_status IN (0, 1))
 );
 
-CREATE PROCEDURE insert_service (
-    insert_service_id IN INT,
+CREATE PROCEDURE insert_service(
     insert_service_name IN VARCHAR,
     insert_service_price IN FLOAT,
     insert_service_status IN VARCHAR
 )
-    AS
+AS
 BEGIN
-  INSERT INTO service (service_id, service_name, service_price, service_status)
-  VALUES (insert_service_id, insert_service_name, insert_service_price, insert_service_status);
+    INSERT INTO service (service_name, service_price, service_status)
+    VALUES (insert_service_name, insert_service_price, insert_service_status);
 END;
 
 -- TESTING DATA
 
 BEGIN
-    insert_service(1, 'Cleaning Room', 10, 'access');
-    insert_service(2, 'Breakfast in the room', 15, 'access');
-    insert_service(3, 'Wake-up call', 1, 'access');
+    insert_service('Cleaning Room', 10, 1);
+    insert_service('Breakfast in the room', 15, 1);
+    insert_service('Wake-up call', 1, 1);
 END;
