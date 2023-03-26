@@ -84,6 +84,11 @@ END;
 -- END CLIENT
 
 -- SUITE TYPES BEGIN
+-- Suite types are declared in suite_type table.
+-- It also has a specification of a suite type (suite_type_spec) used to represent generalization relationship between suite types.
+-- suite_type_spec contains information about suite variant (ROOM or APARTMENT) and number of beds and rooms.
+-- Suite variant is used to determine if a suite type is a room or an apartment.
+-- Number of beds and rooms is used to determine if a suite type is a room or an apartment
 
 -- DROP TABLE XMOISE01.suite_type_spec;
 -- DROP TABLE XMOISE01.suite_type;
@@ -149,6 +154,9 @@ END;
 -- SUITE TYPES END
 
 -- SUITES BEGIN
+-- Suites are declared in suite table.
+-- It also has a specification of a suite type (suite_type_id) used to represent relationship between suite and its suite type.
+-- Suite type is used to determine if a suite is a room or an apartment.
 
 -- DROP TABLE XMOISE01.suite;
 -- DROP VIEW XMOISE01.suite_view;
