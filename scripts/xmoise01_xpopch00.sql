@@ -328,7 +328,10 @@ BEGIN
                             suite.SUITE_NUMBER,
                             TO_DATE('01.0' || counter || '.2024', 'DD.MM.YYYY'),
                             TO_DATE('05.0' || counter || '.2024', 'DD.MM.YYYY'),
-                            'CASH'
+                            CASE
+                                WHEN counter < 3 THEN 'CASH'
+                                ELSE 'CARD'
+                                END
                         );
                 END LOOP;
         END LOOP;
@@ -380,3 +383,60 @@ BEGIN
 END;
 
 -- SERVICE REQUESTS END
+
+
+----------------- THE THIRD PART OF THE PROJECT --------------------
+
+-- Joining service table and service requests by service id
+-- | id service request | name service | date | id reservation |
+SELECT sr.id, s.service_name, sr.service_request_date, sr.reservation_id
+FROM service s
+         INNER JOIN service_request sr ON s.id = sr.service_id;
+
+-- Joining suite table and types of suites by type id
+-- | suite number | type name | price | status |
+SELECT s.suite_number, st.name, st.price, s.suite_status
+FROM suite s
+         INNER JOIN suite_type st ON s.suite_type_id = st.id;
+
+-- Joining reservation, client and suite
+-- | id reservation | client's first name | last name | date arrival | departure | suite |
+SELECT r.id, c.first_name, c.last_name, r.arrival, r.departure, s.suite_number
+FROM reservation r
+         JOIN client c ON r.client_passport = c.passport_number
+         JOIN suite s ON r.suite_number = s.suite_number;
+
+-- Lists the number of rooms of each type (how many rooms of each type)
+SELECT s.suite_type_id, st.name, COUNT(*) AS room_of_types
+FROM suite s
+         JOIN suite_type st ON s.suite_type_id = st.id
+GROUP BY st.name, s.suite_type_id
+ORDER BY s.suite_type_id;
+
+-- Counts the number of reservations by payment
+-- (How many reservations are paid by card and in cash)
+SELECT payment_option, COUNT(*) as count_payment
+FROM reservation
+GROUP BY payment_option;
+
+-- Lists the numbers of the most expensive rooms
+SELECT s.suite_number
+FROM suite s
+         JOIN suite_type st ON s.suite_type_id = st.id
+WHERE st.price = (SELECT MAX(price) FROM suite_type);
+
+-- Lists rooms cheaper than 200
+SELECT *
+FROM suite s
+WHERE EXISTS (SELECT *
+              FROM suite_type st
+              WHERE st.id = s.suite_type_id
+                AND st.price < 200);
+
+-- Lists clients who will arrive after March 1, 2024
+SELECT first_name, last_name, phone_number
+FROM client
+WHERE passport_number IN (SELECT client_passport
+                          FROM reservation
+                          WHERE arrival >= TO_DATE('01.03.2024', 'DD.MM.YYYY'));
+
