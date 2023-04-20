@@ -254,7 +254,8 @@ CREATE TABLE reservation
     suite_number    INT                              NOT NULL,
     arrival         DATE                             NOT NULL,
     departure       DATE                             NOT NULL,
-    payment_option  VARCHAR(4)                       NOT NULL,
+    payment_option  VARCHAR(4)                       NOT NULL,    
+    days            INT GENERATED ALWAYS AS ( departure - arrival ) NOT NULL,
     CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
     CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
     CONSTRAINT fk_payment_check CHECK (payment_option IN ('CASH', 'CARD')),
@@ -328,14 +329,16 @@ BEGIN
                             suite.SUITE_NUMBER,
                             TO_DATE('01.0' || counter || '.2024', 'DD.MM.YYYY'),
                             TO_DATE('05.0' || counter || '.2024', 'DD.MM.YYYY'),
-                            CASE
-                                WHEN counter < 3 THEN 'CASH'
-                                ELSE 'CARD'
-                                END
+                            CASE WHEN MOD(counter, 3) = 0 THEN 'CASH' ELSE 'CARD' END
                         );
                 END LOOP;
         END LOOP;
 END;
+
+ALTER TABLE reservation ADD suite_type INT;
+
+UPDATE reservation
+SET suite_type = (SELECT id FROM suite_type st JOIN suite s on st.id = s.suite_type_id WHERE s.suite_number = suite_number);
 
 -- RESERVATIONS END
 
