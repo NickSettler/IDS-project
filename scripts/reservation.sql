@@ -11,11 +11,26 @@ CREATE TABLE reservation
     arrival         DATE                             NOT NULL,
     departure       DATE                             NOT NULL,
     payment_option  VARCHAR(4)                       NOT NULL,
+    sum             FLOAT                            NOT NULL,
     CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
     CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
     CONSTRAINT fk_payment_check CHECK (payment_option IN ('CASH', 'CARD')),
     CONSTRAINT fk_arrival_check CHECK (arrival < departure)
 );
+
+CREATE OR REPLACE TRIGGER reservation_sum
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    price FLOAT;
+BEGIN
+    SELECT price INTO price FROM suite
+                            JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
+                            WHERE suite_number = :NEW.suite_number;
+
+    :NEW.sum := price * (TO_DATE(:NEW.departure, 'DD.MM.YYYY') - TO_DATE(:NEW.arrival, 'DD.MM.YYYY'));
+END;
 
 CREATE OR REPLACE TRIGGER reservation_check_dates
     BEFORE INSERT OR UPDATE
