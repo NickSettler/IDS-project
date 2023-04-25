@@ -363,6 +363,22 @@ CREATE TABLE service_request
     CONSTRAINT fk_reservation_id FOREIGN KEY (reservation_id) REFERENCES reservation (id)
 );
 
+CREATE OR REPLACE TRIGGER request_check_dates
+    BEFORE INSERT OR UPDATE
+    ON service_request
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*) INTO counter
+        FROM reservation r
+        WHERE r.id = :NEW.reservation_id AND
+              (:NEW.service_request_date < r.arrival OR :NEW.service_request_date > r.departure);
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20003, 'The date of the service request must be on the dates of the reservation.');
+    END IF;
+END;
+
 CREATE VIEW service_request_view AS
 SELECT service_request.id,
        service_request.service_request_date,
@@ -395,6 +411,25 @@ BEGIN
 END;
 
 -- SERVICE REQUESTS END
+
+
+------------------- EXPLAIN PLAN AND INDEX -------------------
+
+-- Plan for a request that lists the names
+-- and number of reservations of Czech residents in alphabetical order
+EXPLAIN PLAN FOR
+    SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
+    FROM reservation r
+    JOIN client c ON c.passport_number = r.client_passport
+    WHERE c.permanent_residence LIKE 'CZK'
+    GROUP BY c.last_name, c.first_name
+    ORDER BY c.last_name;
+-- output
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- Index on the passport number column in
+-- the reservations table to speed up the previous request
+CREATE INDEX client_passport ON reservation (client_passport);
 
 
 ----------------- THE THIRD PART OF THE PROJECT --------------------
