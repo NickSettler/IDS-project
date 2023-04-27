@@ -254,7 +254,8 @@ CREATE TABLE reservation
     suite_number    INT                              NOT NULL,
     arrival         DATE                             NOT NULL,
     departure       DATE                             NOT NULL,
-    payment_option  VARCHAR(4)                       NOT NULL,    
+    guests_count    INT                              NOT NULL,
+    payment_option  VARCHAR(4)                       NOT NULL,
     sum             FLOAT                            NOT NULL,
     CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
     CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
@@ -286,12 +287,50 @@ BEGIN
     END IF;
 END;
 
+CREATE OR REPLACE TRIGGER reservation_check_available
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO counter
+    FROM reservation
+    WHERE suite_number = :NEW.suite_number
+        AND (
+            (:NEW.arrival BETWEEN arrival AND departure)
+            OR (:NEW.departure BETWEEN arrival AND departure)
+        );
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'This suite is already reserved for the specified dates.');
+    END IF;
+END;
+
+CREATE OR REPLACE TRIGGER reservation_check_guests
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO counter
+    FROM suite s
+        JOIN suite_type st ON s.suite_type_id = st.id
+        WHERE :NEW.suite_number = s.suite_number AND :NEW.guests_count > st.capacity;
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Invalid number of guests for this room.');
+    END IF;
+END;
+
 CREATE OR REPLACE VIEW reservation_client_view AS
 SELECT id,
        client_passport,
        suite_number,
        arrival,
        departure,
+       guests_count,
        payment_option,
        c.full_name,
        c.phone_number,
@@ -306,6 +345,7 @@ SELECT id,
        s.floor,
        arrival,
        departure,
+       guests_count,
        payment_option,
        s.price,
        s.capacity,
@@ -321,12 +361,13 @@ CREATE OR REPLACE PROCEDURE insert_reservation(
     insert_suite_number INT,
     insert_arrival DATE,
     insert_departure DATE,
+    insert_guests_count INT,
     insert_payment_option VARCHAR
 )
 AS
 BEGIN
-    INSERT INTO reservation (client_passport, suite_number, arrival, departure, payment_option)
-    VALUES (insert_client_passport, insert_suite_number, insert_arrival, insert_departure, insert_payment_option);
+    INSERT INTO reservation (client_passport, suite_number, arrival, departure, guests_count, payment_option)
+    VALUES (insert_client_passport, insert_suite_number, insert_arrival, insert_departure, insert_guests_count, insert_payment_option);
 END;
 
 -- INSERTS FOR TESTING
@@ -343,6 +384,7 @@ BEGIN
                             suite.SUITE_NUMBER,
                             TO_DATE('01.0' || counter || '.2024', 'DD.MM.YYYY'),
                             TO_DATE('05.0' || counter || '.2024', 'DD.MM.YYYY'),
+                            1,
                             CASE WHEN MOD(counter, 3) = 0 THEN 'CASH' ELSE 'CARD' END
                         );
                 END LOOP;
