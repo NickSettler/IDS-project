@@ -213,29 +213,12 @@ END;
 
 -- END PROCEDURES
 
-
-
--- SUITES BEGIN
--- Suites are declared in suite table.
--- It also has a specification of a suite type (suite_type_id) used to represent relationship between suite and its suite type.
--- Suite type is used to determine if a suite is a room or an apartment.
-
--- DROP PROCEDURE XMOISE01.insert_suite;
-
-
--- DROP TRIGGER reservation_check_dates;
-
-CREATE OR REPLACE TRIGGER reservation_check_dates
-    BEFORE INSERT OR UPDATE
-    ON reservation
-    FOR EACH ROW
-BEGIN
-    IF :NEW.arrival < CURRENT_DATE OR :NEW.departure < CURRENT_DATE THEN
-        RAISE_APPLICATION_ERROR(-20002, 'Arrival and departure dates must be in the future');
-    END IF;
-END;
-
 ----------------- THE FOURTH PART OF THE PROJECT --------------------
+
+-- DROP TRIGGER reservation_sum;
+-- DROP TRIGGER reservation_check_available;
+-- DROP TRIGGER reservation_check_guests;
+-- DROP TRIGGER request_check_dates;
 
 -- Create a trigger that automatically calculates the sum of the reservation
 -- (The trigger should automatically calculate the sum of the reservation
@@ -337,16 +320,16 @@ BEGIN
     SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
 
     IF sel_client_passport IS NULL THEN
-        create_client(
-                '987654321',
+        INSERT INTO CLIENT
+        VALUES ('987654321',
                 'Jane',
                 'Doe',
                 TO_DATE('01.01.2001', 'DD.MM.YYYY'),
                 'Permanent residence',
                 'Temporary residence',
                 '+420987654321',
-                'jane-doe@gmail.com'
-            );
+                'jane-doe@gmail.com',
+                CURRENT_TIMESTAMP);
 
         SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
     END IF;
@@ -356,20 +339,16 @@ BEGIN
     IF sel_suite_number IS NULL THEN
         FOR suite_type IN (SELECT * FROM SUITE_TYPE)
             LOOP
-                insert_suite(suite_type.ID * 1000 + 1, suite_type.ID);
+                INSERT INTO SUITE
+                VALUES (suite_type.ID * 1000 + 1, suite_type.ID, 1);
             END LOOP;
 
         SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
     END IF;
 
-    insert_reservation(
-            sel_client_passport,
-            sel_suite_number,
-            TO_DATE('01.12.2025', 'DD.MM.YYYY'),
-            TO_DATE('14.12.2025', 'DD.MM.YYYY'),
-            1,
-            'CASH'
-        );
+    INSERT INTO RESERVATION(client_passport, suite_number, arrival, departure, guests_count, payment_option)
+    VALUES (sel_client_passport, sel_suite_number, TO_DATE('01.12.2025', 'DD.MM.YYYY'),
+            TO_DATE('14.12.2025', 'DD.MM.YYYY'), 1, 'CASH');
 
     -- Sum trigger works
     SELECT SUM
