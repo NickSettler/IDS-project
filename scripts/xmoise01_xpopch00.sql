@@ -263,20 +263,6 @@ CREATE TABLE reservation
     CONSTRAINT fk_arrival_check CHECK (arrival < departure)
 );
 
-CREATE OR REPLACE TRIGGER reservation_sum
-    BEFORE INSERT OR UPDATE
-    ON reservation
-    FOR EACH ROW
-DECLARE
-    price FLOAT;
-BEGIN
-    SELECT price INTO price FROM suite
-                            JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
-                            WHERE suite_number = :NEW.suite_number;
-
-    :NEW.sum := price * (TO_DATE(:NEW.departure, 'DD.MM.YYYY') - TO_DATE(:NEW.arrival, 'DD.MM.YYYY'));
-END;
-
 CREATE OR REPLACE TRIGGER reservation_check_dates
     BEFORE INSERT OR UPDATE
     ON reservation
@@ -284,43 +270,6 @@ CREATE OR REPLACE TRIGGER reservation_check_dates
 BEGIN
     IF :NEW.arrival < CURRENT_DATE OR :NEW.departure < CURRENT_DATE THEN
         RAISE_APPLICATION_ERROR(-20002, 'Arrival and departure dates must be in the future');
-    END IF;
-END;
-
-CREATE OR REPLACE TRIGGER reservation_check_available
-    BEFORE INSERT OR UPDATE
-    ON reservation
-    FOR EACH ROW
-DECLARE
-    counter INT;
-BEGIN
-    SELECT COUNT(*)
-    INTO counter
-    FROM reservation
-    WHERE suite_number = :NEW.suite_number
-        AND (
-            (:NEW.arrival BETWEEN arrival AND departure)
-            OR (:NEW.departure BETWEEN arrival AND departure)
-        );
-    IF counter > 0 THEN
-        RAISE_APPLICATION_ERROR(-20001, 'This suite is already reserved for the specified dates.');
-    END IF;
-END;
-
-CREATE OR REPLACE TRIGGER reservation_check_guests
-    BEFORE INSERT OR UPDATE
-    ON reservation
-    FOR EACH ROW
-DECLARE
-    counter INT;
-BEGIN
-    SELECT COUNT(*)
-    INTO counter
-    FROM suite s
-        JOIN suite_type st ON s.suite_type_id = st.id
-        WHERE :NEW.suite_number = s.suite_number AND :NEW.guests_count > st.capacity;
-    IF counter > 0 THEN
-        RAISE_APPLICATION_ERROR(-20004, 'Invalid number of guests for this room.');
     END IF;
 END;
 
@@ -367,7 +316,8 @@ CREATE OR REPLACE PROCEDURE insert_reservation(
 AS
 BEGIN
     INSERT INTO reservation (client_passport, suite_number, arrival, departure, guests_count, payment_option)
-    VALUES (insert_client_passport, insert_suite_number, insert_arrival, insert_departure, insert_guests_count, insert_payment_option);
+    VALUES (insert_client_passport, insert_suite_number, insert_arrival, insert_departure, insert_guests_count,
+            insert_payment_option);
 END;
 
 -- INSERTS FOR TESTING
@@ -405,22 +355,6 @@ CREATE TABLE service_request
     CONSTRAINT fk_reservation_id FOREIGN KEY (reservation_id) REFERENCES reservation (id)
 );
 
-CREATE OR REPLACE TRIGGER request_check_dates
-    BEFORE INSERT OR UPDATE
-    ON service_request
-    FOR EACH ROW
-DECLARE
-    counter INT;
-BEGIN
-    SELECT COUNT(*) INTO counter
-        FROM reservation r
-        WHERE r.id = :NEW.reservation_id AND
-              (:NEW.service_request_date < r.arrival OR :NEW.service_request_date > r.departure);
-    IF counter > 0 THEN
-        RAISE_APPLICATION_ERROR(-20003, 'The date of the service request must be on the dates of the reservation.');
-    END IF;
-END;
-
 CREATE VIEW service_request_view AS
 SELECT service_request.id,
        service_request.service_request_date,
@@ -453,26 +387,6 @@ BEGIN
 END;
 
 -- SERVICE REQUESTS END
-
-
-------------------- EXPLAIN PLAN AND INDEX -------------------
-
--- Plan for a request that lists the names
--- and number of reservations of Czech residents in alphabetical order
-EXPLAIN PLAN FOR
-    SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
-    FROM reservation r
-    JOIN client c ON c.passport_number = r.client_passport
-    WHERE c.permanent_residence LIKE 'CZK'
-    GROUP BY c.last_name, c.first_name
-    ORDER BY c.last_name;
--- output
-SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
-
--- Index on the passport number column in
--- the reservations table to speed up the previous request
-CREATE INDEX client_passport ON reservation (client_passport);
-
 
 ----------------- THE THIRD PART OF THE PROJECT --------------------
 
@@ -529,3 +443,273 @@ WHERE passport_number IN (SELECT client_passport
                           FROM reservation
                           WHERE arrival >= TO_DATE('01.03.2024', 'DD.MM.YYYY'));
 
+----------------- THE FOURTH PART OF THE PROJECT --------------------
+
+-- Create a trigger that automatically calculates the sum of the reservation
+-- (The trigger should automatically calculate the sum of the reservation
+-- based on the price of the suite and the number of days of the reservation)
+CREATE OR REPLACE TRIGGER reservation_sum
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    price FLOAT;
+BEGIN
+    SELECT price
+    INTO price
+    FROM suite
+             JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
+    WHERE suite_number = :NEW.suite_number;
+
+    :NEW.sum := price * (TO_DATE(:NEW.departure, 'DD.MM.YYYY') - TO_DATE(:NEW.arrival, 'DD.MM.YYYY'));
+END;
+
+-- Check if the suite is available for the specified dates
+-- (The trigger should not allow you to insert or update a reservation
+-- if the suite is already reserved for the specified dates)
+CREATE OR REPLACE TRIGGER reservation_check_available
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO counter
+    FROM reservation
+    WHERE suite_number = :NEW.suite_number
+      AND (
+            (:NEW.arrival BETWEEN arrival AND departure)
+            OR (:NEW.departure BETWEEN arrival AND departure)
+        );
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'This suite is already reserved for the specified dates.');
+    END IF;
+END;
+
+-- Check if the number of guests does not exceed the capacity of the suite
+-- (The trigger should not allow you to insert or update a reservation
+-- if the number of guests exceeds the capacity of the suite)
+CREATE OR REPLACE TRIGGER reservation_check_guests
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO counter
+    FROM suite s
+             JOIN suite_type st ON s.suite_type_id = st.id
+    WHERE :NEW.suite_number = s.suite_number
+      AND :NEW.guests_count > st.capacity;
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Invalid number of guests for this room.');
+    END IF;
+END;
+
+-- Check if the date of the service request is on the dates of the reservation
+-- (The trigger should not allow you to insert or update a service request
+-- if the date of the service request is not on the dates of the reservation)
+CREATE OR REPLACE TRIGGER request_check_dates
+    BEFORE INSERT OR UPDATE
+    ON service_request
+    FOR EACH ROW
+DECLARE
+    counter INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO counter
+    FROM reservation r
+    WHERE r.id = :NEW.reservation_id
+      AND (:NEW.service_request_date < r.arrival OR :NEW.service_request_date > r.departure);
+    IF counter > 0 THEN
+        RAISE_APPLICATION_ERROR(-20003, 'The date of the service request must be on the dates of the reservation.');
+    END IF;
+END;
+
+-- TESTING TRIGGERS
+-- reservation_sum trigger
+DECLARE
+    sel_suite_number    INT;
+    sel_client_passport VARCHAR(16);
+    reservation_sum     FLOAT;
+    suite_type_price    FLOAT;
+    reservation_check_available_err EXCEPTION;
+    reservation_check_guests_err EXCEPTION;
+    request_check_dates_err EXCEPTION;
+    PRAGMA EXCEPTION_INIT (reservation_check_available_err, -20001);
+    PRAGMA EXCEPTION_INIT (reservation_check_guests_err, -20004);
+    PRAGMA EXCEPTION_INIT (request_check_dates_err, -20003);
+BEGIN
+    SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
+
+    IF sel_client_passport IS NULL THEN
+        create_client(
+                '987654321',
+                'Jane',
+                'Doe',
+                TO_DATE('01.01.2001', 'DD.MM.YYYY'),
+                'Permanent residence',
+                'Temporary residence',
+                '+420987654321',
+                'jane-doe@gmail.com'
+            );
+
+        SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
+    END IF;
+
+    SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
+
+    IF sel_suite_number IS NULL THEN
+        FOR suite_type IN (SELECT * FROM SUITE_TYPE)
+            LOOP
+                insert_suite(suite_type.ID * 1000 + 1, suite_type.ID);
+            END LOOP;
+
+        SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
+    END IF;
+
+    insert_reservation(
+            sel_client_passport,
+            sel_suite_number,
+            TO_DATE('01.12.2025', 'DD.MM.YYYY'),
+            TO_DATE('14.12.2025', 'DD.MM.YYYY'),
+            1,
+            'CASH'
+        );
+
+    -- Sum trigger works
+    SELECT SUM
+    INTO reservation_sum
+    FROM reservation
+    WHERE client_passport = sel_client_passport
+      AND suite_number = sel_suite_number
+      AND arrival = TO_DATE('01.12.2025', 'DD.MM.YYYY')
+      AND departure = TO_DATE('14.12.2025', 'DD.MM.YYYY');
+
+    SELECT ST.price
+    INTO suite_type_price
+    FROM SUITE
+             INNER JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
+    WHERE SUITE.suite_number = sel_suite_number;
+
+    DBMS_OUTPUT.PUT_LINE('Sum trigger works: ' || reservation_sum || 'CZK (' || suite_type_price || 'CZK * 13 days)');
+    DBMS_OUTPUT.PUT_LINE('');
+END;
+
+-- reservation_check_available trigger
+DECLARE
+    sel_suite_number    INT;
+    sel_client_passport VARCHAR(16);
+    reservation_check_available_err EXCEPTION;
+    reservation_check_guests_err EXCEPTION;
+    request_check_dates_err EXCEPTION;
+    PRAGMA EXCEPTION_INIT (reservation_check_available_err, -20001);
+    PRAGMA EXCEPTION_INIT (reservation_check_guests_err, -20004);
+    PRAGMA EXCEPTION_INIT (request_check_dates_err, -20003);
+BEGIN
+    SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
+    SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
+
+
+    INSERT INTO RESERVATION (client_passport, suite_number, arrival, departure, guests_count, payment_option)
+    VALUES (sel_client_passport, sel_suite_number, TO_DATE('01.12.2025', 'DD.MM.YYYY'),
+            TO_DATE('14.12.2025', 'DD.MM.YYYY'), 1, 'CASH');
+EXCEPTION
+    WHEN reservation_check_available_err THEN
+        DBMS_OUTPUT.PUT_LINE('reservation_check_available trigger works: ' || SQLERRM);
+        DBMS_OUTPUT.PUT_LINE('');
+END;
+
+-- reservation_check_guests trigger
+DECLARE
+    sel_suite_number    INT;
+    sel_client_passport VARCHAR(16);
+    reservation_check_available_err EXCEPTION;
+    reservation_check_guests_err EXCEPTION;
+    request_check_dates_err EXCEPTION;
+    PRAGMA EXCEPTION_INIT (reservation_check_available_err, -20001);
+    PRAGMA EXCEPTION_INIT (reservation_check_guests_err, -20004);
+    PRAGMA EXCEPTION_INIT (request_check_dates_err, -20003);
+BEGIN
+    SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
+    SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
+
+
+    INSERT INTO RESERVATION (client_passport, suite_number, arrival, departure, guests_count, payment_option)
+    VALUES (sel_client_passport, sel_suite_number, TO_DATE('01.12.2026', 'DD.MM.YYYY'),
+            TO_DATE('14.12.2026', 'DD.MM.YYYY'), 100, 'CASH');
+EXCEPTION
+    WHEN reservation_check_guests_err THEN
+        DBMS_OUTPUT.PUT_LINE('reservation_check_guests trigger works: ' || SQLERRM);
+        DBMS_OUTPUT.PUT_LINE('');
+END;
+
+-- request_check_dates trigger
+DECLARE
+    sel_suite_number    INT;
+    sel_client_passport VARCHAR(16);
+    sel_service_id      INT;
+    sel_reservation_id      INT;
+    reservation_check_available_err EXCEPTION;
+    reservation_check_guests_err EXCEPTION;
+    request_check_dates_err EXCEPTION;
+    PRAGMA EXCEPTION_INIT (reservation_check_available_err, -20001);
+    PRAGMA EXCEPTION_INIT (reservation_check_guests_err, -20004);
+    PRAGMA EXCEPTION_INIT (request_check_dates_err, -20003);
+BEGIN
+    SELECT passport_number INTO sel_client_passport FROM client WHERE rownum = 1;
+    SELECT suite_number INTO sel_suite_number FROM suite WHERE rownum = 1;
+    SELECT ID INTO sel_service_id FROM SERVICE WHERE rownum = 1;
+
+    IF sel_service_id IS NULL THEN
+        INSERT INTO SERVICE(service_name, service_price, service_status)
+        VALUES ('Test service', 100, 1);
+
+        SELECT ID INTO sel_service_id FROM SERVICE WHERE rownum = 1;
+    END IF;
+
+    SELECT ID
+    INTO sel_reservation_id
+    FROM reservation
+    WHERE client_passport = sel_client_passport
+      AND suite_number = sel_suite_number
+      AND arrival = TO_DATE('01.12.2025', 'DD.MM.YYYY')
+      AND departure = TO_DATE('14.12.2025', 'DD.MM.YYYY');
+
+    INSERT INTO service_request(service_request_date, service_id, reservation_id)
+    VALUES (TO_DATE('01.01.2025', 'DD.MM.YYYY'), sel_service_id, sel_reservation_id);
+EXCEPTION
+    WHEN request_check_dates_err THEN
+        DBMS_OUTPUT.PUT_LINE('request_check_dates trigger works: ' || SQLERRM);
+        DBMS_OUTPUT.PUT_LINE('');
+END;
+
+-- Plan for a request that lists the names
+-- and number of reservations of Czech residents in alphabetical order
+EXPLAIN PLAN FOR
+SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
+FROM reservation r
+         JOIN client c ON c.passport_number = r.client_passport
+WHERE c.permanent_residence LIKE 'CZK'
+GROUP BY c.last_name, c.first_name
+ORDER BY c.last_name;
+-- output
+SELECT *
+FROM TABLE (DBMS_XPLAN.DISPLAY);
+
+-- Index on the passport number column in
+-- the reservations table to speed up the previous request
+CREATE INDEX client_passport ON reservation (client_passport);
+
+EXPLAIN PLAN FOR
+SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
+FROM reservation r
+         JOIN client c ON c.passport_number = r.client_passport
+WHERE c.permanent_residence LIKE 'CZK'
+GROUP BY c.last_name, c.first_name
+ORDER BY c.last_name;
+
+SELECT *
+FROM TABLE (DBMS_XPLAN.DISPLAY);
