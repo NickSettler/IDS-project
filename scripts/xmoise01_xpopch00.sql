@@ -166,9 +166,8 @@ FROM service_request
 
 -- BEGIN PROCEDURES
 
--- END PROCEDURES
-
 -- DROP PROCEDURE create_client;
+-- DROP PROCEDURE insert_suite_type;
 
 CREATE OR REPLACE PROCEDURE create_client(
     insert_passport_number IN VARCHAR,
@@ -194,19 +193,6 @@ BEGIN
             CURRENT_TIMESTAMP);
 END;
 
--- END CLIENT
-
--- SUITE TYPES BEGIN
--- Suite types are declared in suite_type table.
--- It also has a specification of a suite type (suite_type_spec) used to represent generalization relationship between suite types.
--- suite_type_spec contains information about suite variant (ROOM or APARTMENT) and number of beds and rooms.
--- Suite variant is used to determine if a suite type is a room or an apartment.
--- Number of beds and rooms is used to determine if a suite type is a room or an apartment
-
--- DROP PROCEDURE XMOISE01.insert_suite_type;
-
-
-
 CREATE OR REPLACE PROCEDURE insert_suite_type(
     suite_name IN VARCHAR,
     suite_capacity IN INT,
@@ -225,7 +211,9 @@ BEGIN
     VALUES (suite_type_id, suite_type, suite_beds_count, suite_rooms_count);
 END;
 
--- SUITE TYPES END
+-- END PROCEDURES
+
+
 
 -- SUITES BEGIN
 -- Suites are declared in suite table.
