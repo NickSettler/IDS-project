@@ -1,10 +1,10 @@
 -- BEGIN TABLES
 
--- DROP TABLE XMOISE01.client;
--- DROP TABLE XMOISE01.suite_type_spec;
--- DROP TABLE XMOISE01.suite_type;
--- DROP TABLE XMOISE01.suite;
--- DROP TABLE XMOISE01.service;
+-- DROP TABLE client;
+-- DROP TABLE suite_type_spec;
+-- DROP TABLE suite_type;
+-- DROP TABLE suite;
+-- DROP TABLE service;
 -- DROP TABLE reservation;
 
 CREATE TABLE client
