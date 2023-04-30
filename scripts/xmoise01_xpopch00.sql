@@ -1,11 +1,13 @@
 -- BEGIN TABLES
 
+-- DROP TABLE service_request;
+-- DROP TRIGGER reservation_sum;
+-- DROP TABLE reservation;
 -- DROP TABLE client;
+-- DROP TABLE service;
+-- DROP TABLE suite;
 -- DROP TABLE suite_type_spec;
 -- DROP TABLE suite_type;
--- DROP TABLE suite;
--- DROP TABLE service;
--- DROP TABLE reservation;
 
 CREATE TABLE client
 (
