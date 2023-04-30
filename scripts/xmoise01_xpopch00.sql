@@ -76,7 +76,7 @@ CREATE TABLE reservation
     departure       DATE                             NOT NULL,
     guests_count    INT                              NOT NULL,
     payment_option  VARCHAR(4)                       NOT NULL,
-    sum             FLOAT                            NOT NULL,
+    sum             FLOAT DEFAULT 0                  NOT NULL,
     CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
     CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
     CONSTRAINT fk_payment_check CHECK (payment_option IN ('CASH', 'CARD')),
