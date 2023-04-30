@@ -117,3 +117,8 @@ By using these indexes, the join operations involved in the `SELECT` statement c
 faster overall query execution time. The `EXPLAIN PLAN` statement can be used to analyze the execution plan of the query
 and determine whether the indexes are being used effectively. The `DBMS_XPLAN.DISPLAY` function can be used to display
 the execution plan details and identify any performance bottlenecks in the query execution.
+
+The second output shows that using appropriate indexes can significantly improve the performance of a query. Compared to
+the first output, the second output has a lower cost and uses less CPU time to execute the same query. The use of an
+index range scan on the `SUITE_NUMBER` column and an index full scan on the `SUITE_TYPE_ID` column have reduced the
+number of rows accessed, resulting in a faster query execution time. 
