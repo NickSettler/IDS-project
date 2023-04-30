@@ -956,7 +956,6 @@ FROM reservation r
          JOIN suite_type st on s.suite_type_id = st.id
 GROUP BY s.suite_number, st.capacity;
 
--- Speed up the previous request by creating indexes
 CREATE INDEX suite_number ON reservation (suite_number);
 CREATE INDEX suite_type_id ON suite (suite_type_id);
 
