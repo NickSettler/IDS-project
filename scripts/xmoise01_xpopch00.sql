@@ -85,6 +85,25 @@ CREATE TABLE reservation
     CONSTRAINT fk_arrival_check CHECK (arrival < departure)
 );
 
+-- Create a trigger that automatically calculates the sum of the reservation
+-- (The trigger should automatically calculate the sum of the reservation
+-- based on the price of the suite and the number of days of the reservation)
+CREATE OR REPLACE TRIGGER reservation_sum
+    BEFORE INSERT OR UPDATE
+    ON reservation
+    FOR EACH ROW
+DECLARE
+    price FLOAT;
+BEGIN
+    SELECT price
+    INTO price
+    FROM suite
+             JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
+    WHERE suite_number = :NEW.suite_number;
+
+    :NEW.sum := price * (TO_DATE(:NEW.departure, 'DD.MM.YYYY') - TO_DATE(:NEW.arrival, 'DD.MM.YYYY'));
+END;
+
 CREATE TABLE service_request
 (
     id                   INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
@@ -217,29 +236,9 @@ END;
 
 ----------------- THE FOURTH PART OF THE PROJECT --------------------
 
--- DROP TRIGGER reservation_sum;
 -- DROP TRIGGER reservation_check_available;
 -- DROP TRIGGER reservation_check_guests;
 -- DROP TRIGGER request_check_dates;
-
--- Create a trigger that automatically calculates the sum of the reservation
--- (The trigger should automatically calculate the sum of the reservation
--- based on the price of the suite and the number of days of the reservation)
-CREATE OR REPLACE TRIGGER reservation_sum
-    BEFORE INSERT OR UPDATE
-    ON reservation
-    FOR EACH ROW
-DECLARE
-    price FLOAT;
-BEGIN
-    SELECT price
-    INTO price
-    FROM suite
-             JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
-    WHERE suite_number = :NEW.suite_number;
-
-    :NEW.sum := price * (TO_DATE(:NEW.departure, 'DD.MM.YYYY') - TO_DATE(:NEW.arrival, 'DD.MM.YYYY'));
-END;
 
 -- Check if the suite is available for the specified dates
 -- (The trigger should not allow you to insert or update a reservation
