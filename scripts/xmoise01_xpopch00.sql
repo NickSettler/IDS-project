@@ -651,7 +651,7 @@ DECLARE
     sel_suite_number    INT;
     sel_client_passport VARCHAR(16);
     sel_service_id      INT;
-    sel_reservation_id      INT;
+    sel_reservation_id  INT;
     reservation_check_available_err EXCEPTION;
     reservation_check_guests_err EXCEPTION;
     request_check_dates_err EXCEPTION;
@@ -686,30 +686,48 @@ EXCEPTION
         DBMS_OUTPUT.PUT_LINE('');
 END;
 
--- Plan for a request that lists the names
--- and number of reservations of Czech residents in alphabetical order
 EXPLAIN PLAN FOR
-SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
+SELECT s.suite_number, st.capacity, COUNT(r.client_passport) AS reservation_quantity
 FROM reservation r
-         JOIN client c ON c.passport_number = r.client_passport
-WHERE c.permanent_residence LIKE 'CZK'
-GROUP BY c.last_name, c.first_name
-ORDER BY c.last_name;
--- output
+         JOIN suite s on r.suite_number = s.suite_number
+         JOIN suite_type st on s.suite_type_id = st.id
+GROUP BY s.suite_number, st.capacity;
+
+-- Speed up the previous request by creating indexes
+CREATE INDEX suite_number ON reservation (suite_number);
+CREATE INDEX suite_type_id ON suite (suite_type_id);
+
 SELECT *
 FROM TABLE (DBMS_XPLAN.DISPLAY);
 
--- Index on the passport number column in
--- the reservations table to speed up the previous request
-CREATE INDEX client_passport ON reservation (client_passport);
-
 EXPLAIN PLAN FOR
-SELECT c.last_name, c.first_name, COUNT(r.client_passport) AS reservation_quantity
+SELECT s.suite_number, st.capacity, COUNT(r.client_passport) AS reservation_quantity
 FROM reservation r
-         JOIN client c ON c.passport_number = r.client_passport
-WHERE c.permanent_residence LIKE 'CZK'
-GROUP BY c.last_name, c.first_name
-ORDER BY c.last_name;
+         JOIN suite s on r.suite_number = s.suite_number
+         JOIN suite_type st on s.suite_type_id = st.id
+GROUP BY s.suite_number, st.capacity;
 
 SELECT *
 FROM TABLE (DBMS_XPLAN.DISPLAY);
+
+-- Grant access rights to the XPOPCH00 user
+GRANT ALL ON reservation TO XPOPCH00;
+GRANT ALL ON client TO XPOPCH00;
+GRANT ALL ON service TO XPOPCH00;
+GRANT ALL ON service_request TO XPOPCH00;
+GRANT ALL ON suite TO XPOPCH00;
+GRANT ALL ON suite_type TO XPOPCH00;
+GRANT ALL ON suite_type_spec TO XPOPCH00;
+
+GRANT SELECT ON reservation_suite_view TO XPOPCH00;
+
+-- Select request to display the status of clients' arrivals
+SELECT c.first_name || ' ' || c.last_name ||
+       CASE
+           WHEN r.arrival < CURRENT_DATE THEN 'already arrived in the past'
+           WHEN r.arrival > CURRENT_DATE AND r.departure < CURRENT_DATE THEN ' is currently in the hotel'
+           ELSE ' will arrive in the future'
+           END AS status
+FROM reservation r
+         JOIN client c ON r.client_passport = c.passport_number;
+
