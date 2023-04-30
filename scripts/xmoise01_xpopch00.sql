@@ -6,8 +6,6 @@
 -- DROP TABLE XMOISE01.suite;
 -- DROP TABLE XMOISE01.service;
 -- DROP TABLE reservation;
--- DROP VIEW XMOISE01.client_view;
--- DROP PROCEDURE XMOISE01.create_client;
 
 CREATE TABLE client
 (
@@ -95,18 +93,82 @@ CREATE TABLE service_request
     CONSTRAINT fk_reservation_id FOREIGN KEY (reservation_id) REFERENCES reservation (id)
 );
 
-CREATE OR REPLACE VIEW client_view AS
-SELECT passport_number,
-       first_name,
-       last_name,
-       (first_name || ' ' || last_name) AS full_name,
-       birth_date,
-       permanent_residence,
-       temporary_residence,
-       phone_number,
-       email,
-       registration_date
-FROM client;
+-- END TABLES
+
+-- BEGIN VIEWS
+
+-- DROP VIEW suite_type_view;
+-- DROP VIEW suite_view;
+-- DROP VIEW reservation_client_view;
+-- DROP VIEW reservation_suite_view;
+-- DROP VIEW service_request_view;
+
+CREATE OR REPLACE VIEW suite_type_view AS
+SELECT suite_type_id AS id, STS.suite_variant, name, capacity, price, beds_count, rooms_count
+FROM suite_type
+         JOIN suite_type_spec STS on suite_type.ID = STS.SUITE_TYPE_ID;
+
+CREATE VIEW suite_view AS
+SELECT suite_number,
+       SUBSTR(suite_number, 1, 1) AS floor,
+       ST.CAPACITY,
+       ST.NAME,
+       ST.PRICE,
+       STS.ROOMS_COUNT,
+       STS.BEDS_COUNT,
+       STS.SUITE_VARIANT
+FROM suite
+         JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
+         JOIN SUITE_TYPE_SPEC STS on ST.ID = STS.SUITE_TYPE_ID;
+
+CREATE OR REPLACE VIEW reservation_client_view AS
+SELECT id,
+       client_passport,
+       suite_number,
+       arrival,
+       departure,
+       guests_count,
+       payment_option,
+       c.first_name,
+       c.last_name,
+       c.phone_number,
+       c.email
+FROM reservation
+         JOIN client c ON client_passport = c.passport_number;
+
+CREATE OR REPLACE VIEW reservation_suite_view AS
+SELECT id,
+       client_passport,
+       r.suite_number,
+       s.floor,
+       arrival,
+       departure,
+       guests_count,
+       payment_option,
+       sum,
+       s.price,
+       s.capacity,
+       s.rooms_count,
+       s.beds_count,
+       s.suite_variant
+FROM reservation r
+         JOIN SUITE_VIEW s ON r.suite_number = s.suite_number;
+
+CREATE VIEW service_request_view AS
+SELECT service_request.id,
+       service_request.service_request_date,
+       s.service_name,
+       s.service_price
+FROM service_request
+         JOIN service s ON service_request.service_id = s.ID;
+
+-- END VIEWS
+
+-- BEGIN PROCEDURES
+
+-- END PROCEDURES
+
+-- DROP PROCEDURE create_client;
 
 CREATE OR REPLACE PROCEDURE create_client(
     insert_passport_number IN VARCHAR,
@@ -141,14 +203,9 @@ END;
 -- Suite variant is used to determine if a suite type is a room or an apartment.
 -- Number of beds and rooms is used to determine if a suite type is a room or an apartment
 
--- DROP VIEW XMOISE01.suite_type_view;
 -- DROP PROCEDURE XMOISE01.insert_suite_type;
 
 
-CREATE OR REPLACE VIEW suite_type_view AS
-SELECT suite_type_id AS id, STS.suite_variant, name, capacity, price, beds_count, rooms_count
-FROM suite_type
-         JOIN suite_type_spec STS on suite_type.ID = STS.SUITE_TYPE_ID;
 
 CREATE OR REPLACE PROCEDURE insert_suite_type(
     suite_name IN VARCHAR,
@@ -168,16 +225,6 @@ BEGIN
     VALUES (suite_type_id, suite_type, suite_beds_count, suite_rooms_count);
 END;
 
--- INSERTS FOR TESTING
-DECLARE
-    suite_type_id INT;
-BEGIN
-    insert_suite_type('Single Room', 4, 100, 'ROOM', 1, 1, suite_type_id);
-    insert_suite_type('Double Room', 4, 150, 'ROOM', 2, 1, suite_type_id);
-    insert_suite_type('Standard Apartment', 1, 200, 'APARTMENT', 1, 2, suite_type_id);
-    insert_suite_type('Luxury Apartment', 1, 300, 'APARTMENT', 2, 2, suite_type_id);
-END;
-
 -- SUITE TYPES END
 
 -- SUITES BEGIN
@@ -185,72 +232,10 @@ END;
 -- It also has a specification of a suite type (suite_type_id) used to represent relationship between suite and its suite type.
 -- Suite type is used to determine if a suite is a room or an apartment.
 
--- DROP VIEW XMOISE01.suite_view;
 -- DROP PROCEDURE XMOISE01.insert_suite;
 
-CREATE VIEW suite_view AS
-SELECT suite_number,
-       SUBSTR(suite_number, 1, 1) AS floor,
-       ST.CAPACITY,
-       ST.NAME,
-       ST.PRICE,
-       STS.ROOMS_COUNT,
-       STS.BEDS_COUNT,
-       STS.SUITE_VARIANT
-FROM suite
-         JOIN SUITE_TYPE ST on ST.ID = SUITE.SUITE_TYPE_ID
-         JOIN SUITE_TYPE_SPEC STS on ST.ID = STS.SUITE_TYPE_ID;
-
-CREATE PROCEDURE insert_suite(insert_number IN INT, insert_type_id IN INT)
-AS
-BEGIN
-    INSERT INTO suite (suite_number, suite_type_id)
-    VALUES (insert_number, insert_type_id);
-END;
-
--- INSERTS FOR TESTING
-BEGIN
-    FOR suite_type IN (SELECT * FROM SUITE_TYPE)
-        LOOP
-            insert_suite(suite_type.ID * 1000 + 1, suite_type.ID);
-            insert_suite
-                (suite_type.ID * 1000 + 2, suite_type.ID);
-            insert_suite
-                (suite_type.ID * 1000 + 3, suite_type.ID);
-        END LOOP;
-END;
-
--- SUITES END
-
--- SERVICES BEGIN
-
-
-CREATE PROCEDURE insert_service(
-    insert_service_name IN VARCHAR,
-    insert_service_price IN FLOAT,
-    insert_service_status IN VARCHAR
-)
-AS
-BEGIN
-    INSERT INTO service (service_name, service_price, service_status)
-    VALUES (insert_service_name, insert_service_price, insert_service_status);
-END;
-
--- TESTING DATA
-
-BEGIN
-    insert_service('Cleaning Room', 10, 1);
-    insert_service('Breakfast in the room', 15, 1);
-    insert_service('Wake-up call', 1, 1);
-END;
-
--- SERVICES END
-
--- RESERVATIONS BEGIN
 
 -- DROP TRIGGER reservation_check_dates;
--- DROP VIEW reservation_client_view;
--- DROP VIEW reservation_suite_view;
 
 CREATE OR REPLACE TRIGGER reservation_check_dates
     BEFORE INSERT OR UPDATE
@@ -261,167 +246,6 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20002, 'Arrival and departure dates must be in the future');
     END IF;
 END;
-
-CREATE OR REPLACE VIEW reservation_client_view AS
-SELECT id,
-       client_passport,
-       suite_number,
-       arrival,
-       departure,
-       guests_count,
-       payment_option,
-       c.full_name,
-       c.phone_number,
-       c.email
-FROM reservation
-         JOIN CLIENT_VIEW c ON client_passport = c.passport_number;
-
-CREATE OR REPLACE VIEW reservation_suite_view AS
-SELECT id,
-       client_passport,
-       r.suite_number,
-       s.floor,
-       arrival,
-       departure,
-       guests_count,
-       payment_option,
-       s.price,
-       s.capacity,
-       s.rooms_count,
-       s.beds_count,
-       s.suite_variant,
-       ROUND((s.price * (r.departure - r.arrival)), 2) AS total_price
-FROM reservation r
-         JOIN SUITE_VIEW s ON r.suite_number = s.suite_number;
-
-CREATE OR REPLACE PROCEDURE insert_reservation(
-    insert_client_passport VARCHAR,
-    insert_suite_number INT,
-    insert_arrival DATE,
-    insert_departure DATE,
-    insert_guests_count INT,
-    insert_payment_option VARCHAR
-)
-AS
-BEGIN
-    INSERT INTO reservation (client_passport, suite_number, arrival, departure, guests_count, payment_option)
-    VALUES (insert_client_passport, insert_suite_number, insert_arrival, insert_departure, insert_guests_count,
-            insert_payment_option);
-END;
-
--- INSERTS FOR TESTING
-DECLARE
-    counter INT := 0;
-BEGIN
-    FOR client IN (SELECT * FROM CLIENT)
-        LOOP
-            FOR suite in (SELECT * FROM SUITE WHERE ROWNUM <= 2)
-                LOOP
-                    counter := counter + 1;
-                    insert_reservation(
-                            CLIENT.PASSPORT_NUMBER,
-                            suite.SUITE_NUMBER,
-                            TO_DATE('01.0' || counter || '.2024', 'DD.MM.YYYY'),
-                            TO_DATE('05.0' || counter || '.2024', 'DD.MM.YYYY'),
-                            1,
-                            CASE WHEN MOD(counter, 3) = 0 THEN 'CASH' ELSE 'CARD' END
-                        );
-                END LOOP;
-        END LOOP;
-END;
-
--- RESERVATIONS END
-
--- SERVICE REQUESTS BEGIN
-
-
-CREATE VIEW service_request_view AS
-SELECT service_request.id,
-       service_request.service_request_date,
-       s.service_name,
-       s.service_price
-FROM service_request
-         JOIN service s ON service_request.service_id = s.ID;
-
-CREATE PROCEDURE insert_service_request(
-    insert_request_date IN DATE,
-    insert_service_id IN INT,
-    insert_reservation_id IN INT
-)
-AS
-BEGIN
-    INSERT INTO service_request (service_request_date, service_id, reservation_id)
-    VALUES (insert_request_date, insert_service_id, insert_reservation_id);
-END;
-
--- TESTING DATA
-
-BEGIN
-    FOR res in (SELECT * FROM RESERVATION)
-        LOOP
-            FOR serv in (SELECT * FROM SERVICE)
-                LOOP
-                    insert_service_request('01-04-2023', serv.id, res.ID);
-                END LOOP;
-        END LOOP;
-END;
-
--- SERVICE REQUESTS END
-
------------------ THE THIRD PART OF THE PROJECT --------------------
-
--- Joining service table and service requests by service id
--- | id service request | name service | date | id reservation |
-SELECT sr.id, s.service_name, sr.service_request_date, sr.reservation_id
-FROM service s
-         INNER JOIN service_request sr ON s.id = sr.service_id;
-
--- Joining suite table and types of suites by type id
--- | suite number | type name | price | status |
-SELECT s.suite_number, st.name, st.price, s.suite_status
-FROM suite s
-         INNER JOIN suite_type st ON s.suite_type_id = st.id;
-
--- Joining reservation, client and suite
--- | id reservation | client's first name | last name | date arrival | departure | suite |
-SELECT r.id, c.first_name, c.last_name, r.arrival, r.departure, s.suite_number
-FROM reservation r
-         JOIN client c ON r.client_passport = c.passport_number
-         JOIN suite s ON r.suite_number = s.suite_number;
-
--- Lists the number of rooms of each type (how many rooms of each type)
-SELECT s.suite_type_id, st.name, COUNT(*) AS room_of_types
-FROM suite s
-         JOIN suite_type st ON s.suite_type_id = st.id
-GROUP BY st.name, s.suite_type_id
-ORDER BY s.suite_type_id;
-
--- Counts the number of reservations by payment
--- (How many reservations are paid by card and in cash)
-SELECT payment_option, COUNT(*) as count_payment
-FROM reservation
-GROUP BY payment_option;
-
--- Lists the numbers of the most expensive rooms
-SELECT s.suite_number
-FROM suite s
-         JOIN suite_type st ON s.suite_type_id = st.id
-WHERE st.price = (SELECT MAX(price) FROM suite_type);
-
--- Lists rooms cheaper than 200
-SELECT *
-FROM suite s
-WHERE EXISTS (SELECT *
-              FROM suite_type st
-              WHERE st.id = s.suite_type_id
-                AND st.price < 200);
-
--- Lists clients who will arrive after March 1, 2024
-SELECT first_name, last_name, phone_number
-FROM client
-WHERE passport_number IN (SELECT client_passport
-                          FROM reservation
-                          WHERE arrival >= TO_DATE('01.03.2024', 'DD.MM.YYYY'));
 
 ----------------- THE FOURTH PART OF THE PROJECT --------------------
 
