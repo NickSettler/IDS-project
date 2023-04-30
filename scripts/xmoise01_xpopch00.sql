@@ -1,6 +1,11 @@
--- BEGIN CLIENT
+-- BEGIN TABLES
 
 -- DROP TABLE XMOISE01.client;
+-- DROP TABLE XMOISE01.suite_type_spec;
+-- DROP TABLE XMOISE01.suite_type;
+-- DROP TABLE XMOISE01.suite;
+-- DROP TABLE XMOISE01.service;
+-- DROP TABLE reservation;
 -- DROP VIEW XMOISE01.client_view;
 -- DROP PROCEDURE XMOISE01.create_client;
 
@@ -18,6 +23,76 @@ CREATE TABLE client
 
     CONSTRAINT phone_number_check CHECK (REGEXP_LIKE(phone_number, '^\+?[0-9]+$')),
     CONSTRAINT email_check CHECK (REGEXP_LIKE(email, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'))
+);
+
+CREATE TABLE suite_type
+(
+    id       INT GENERATED ALWAYS AS IDENTITY NOT NULL,
+    name     VARCHAR(255)                     NOT NULL CHECK ( name <> '' ),
+    capacity INT                              NOT NULL CHECK ( capacity > 0 ),
+    price    FLOAT                            NOT NULL CHECK ( price > 0 ),
+    CONSTRAINT suite_type_pk PRIMARY KEY (id),
+    CONSTRAINT suite_type_unique UNIQUE (name)
+);
+
+CREATE TABLE suite_type_spec
+(
+    suite_type_id INT          NOT NULL,
+    suite_variant VARCHAR(255) NOT NULL CHECK ( suite_variant in ('ROOM', 'APARTMENT') ),
+    beds_count    INT          NOT NULL CHECK ( beds_count > 0 ),
+    rooms_count   INT          NOT NULL CHECK ( rooms_count > 0 ),
+    CONSTRAINT suite_type_spec_pk PRIMARY KEY (suite_type_id),
+    CONSTRAINT suite_type_spec_fk FOREIGN KEY (suite_type_id) REFERENCES suite_type (id),
+    CONSTRAINT suite_type_spec_unique UNIQUE (suite_variant, beds_count, rooms_count),
+    CONSTRAINT suite_type_spec_check CHECK ( suite_variant = 'ROOM' AND beds_count >= 1 AND rooms_count = 1 OR
+                                             suite_variant = 'APARTMENT' AND beds_count >= 1 AND rooms_count > 1 )
+);
+
+CREATE TABLE suite
+(
+    suite_number  INT NOT NULL PRIMARY KEY,
+    suite_type_id INT,
+    -- 0 - not available, 1 - available
+    suite_status  SMALLINT DEFAULT 1,
+    CONSTRAINT suite_type_id_fk FOREIGN KEY (suite_type_id) REFERENCES suite_type (id)
+        ON DELETE SET NULL,
+    CONSTRAINT suite_number_fk CHECK ( suite_number > 1000 AND suite_number < 9999 ),
+    CONSTRAINT suite_status_ck CHECK ( suite_status IN (0, 1))
+);
+
+CREATE TABLE service
+(
+    id             INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
+    service_name   VARCHAR(255)                     NOT NULL,
+    service_price  FLOAT                            NOT NULL,
+    service_status SMALLINT                         NOT NULL,
+    CONSTRAINT service_status_check CHECK (service_status IN (0, 1))
+);
+
+CREATE TABLE reservation
+(
+    id              INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
+    client_passport VARCHAR(16)                      NOT NULL,
+    suite_number    INT                              NOT NULL,
+    arrival         DATE                             NOT NULL,
+    departure       DATE                             NOT NULL,
+    guests_count    INT                              NOT NULL,
+    payment_option  VARCHAR(4)                       NOT NULL,
+    sum             FLOAT                            NOT NULL,
+    CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
+    CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
+    CONSTRAINT fk_payment_check CHECK (payment_option IN ('CASH', 'CARD')),
+    CONSTRAINT fk_arrival_check CHECK (arrival < departure)
+);
+
+CREATE TABLE service_request
+(
+    id                   INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
+    service_request_date DATE                             NOT NULL,
+    service_id           INT                              NOT NULL,
+    reservation_id       INT                              NOT NULL,
+    CONSTRAINT fk_service_id FOREIGN KEY (service_id) REFERENCES service (id),
+    CONSTRAINT fk_reservation_id FOREIGN KEY (reservation_id) REFERENCES reservation (id)
 );
 
 CREATE OR REPLACE VIEW client_view AS
@@ -57,30 +132,6 @@ BEGIN
             CURRENT_TIMESTAMP);
 END;
 
--- INSERTS FOR TESTING
-BEGIN
-    create_client(
-            '123456789',
-            'John',
-            'Doe',
-            TO_DATE('01.01.2000', 'DD.MM.YYYY'),
-            'Permanent residence',
-            'Temporary residence',
-            '+420123456789',
-            'john-doe@gmail.com'
-        );
-    create_client(
-            '987654321',
-            'Jane',
-            'Doe',
-            TO_DATE('01.01.2001', 'DD.MM.YYYY'),
-            'Permanent residence',
-            'Temporary residence',
-            '+420987654321',
-            'jane-doe@gmail.com'
-        );
-END;
-
 -- END CLIENT
 
 -- SUITE TYPES BEGIN
@@ -90,33 +141,9 @@ END;
 -- Suite variant is used to determine if a suite type is a room or an apartment.
 -- Number of beds and rooms is used to determine if a suite type is a room or an apartment
 
--- DROP TABLE XMOISE01.suite_type_spec;
--- DROP TABLE XMOISE01.suite_type;
 -- DROP VIEW XMOISE01.suite_type_view;
 -- DROP PROCEDURE XMOISE01.insert_suite_type;
 
-CREATE TABLE suite_type
-(
-    id       INT GENERATED ALWAYS AS IDENTITY NOT NULL,
-    name     VARCHAR(255)                     NOT NULL CHECK ( name <> '' ),
-    capacity INT                              NOT NULL CHECK ( capacity > 0 ),
-    price    FLOAT                            NOT NULL CHECK ( price > 0 ),
-    CONSTRAINT suite_type_pk PRIMARY KEY (id),
-    CONSTRAINT suite_type_unique UNIQUE (name)
-);
-
-CREATE TABLE suite_type_spec
-(
-    suite_type_id INT          NOT NULL,
-    suite_variant VARCHAR(255) NOT NULL CHECK ( suite_variant in ('ROOM', 'APARTMENT') ),
-    beds_count    INT          NOT NULL CHECK ( beds_count > 0 ),
-    rooms_count   INT          NOT NULL CHECK ( rooms_count > 0 ),
-    CONSTRAINT suite_type_spec_pk PRIMARY KEY (suite_type_id),
-    CONSTRAINT suite_type_spec_fk FOREIGN KEY (suite_type_id) REFERENCES suite_type (id),
-    CONSTRAINT suite_type_spec_unique UNIQUE (suite_variant, beds_count, rooms_count),
-    CONSTRAINT suite_type_spec_check CHECK ( suite_variant = 'ROOM' AND beds_count >= 1 AND rooms_count = 1 OR
-                                             suite_variant = 'APARTMENT' AND beds_count >= 1 AND rooms_count > 1 )
-);
 
 CREATE OR REPLACE VIEW suite_type_view AS
 SELECT suite_type_id AS id, STS.suite_variant, name, capacity, price, beds_count, rooms_count
@@ -158,21 +185,8 @@ END;
 -- It also has a specification of a suite type (suite_type_id) used to represent relationship between suite and its suite type.
 -- Suite type is used to determine if a suite is a room or an apartment.
 
--- DROP TABLE XMOISE01.suite;
 -- DROP VIEW XMOISE01.suite_view;
 -- DROP PROCEDURE XMOISE01.insert_suite;
-
-CREATE TABLE suite
-(
-    suite_number  INT NOT NULL PRIMARY KEY,
-    suite_type_id INT,
-    -- 0 - not available, 1 - available
-    suite_status  SMALLINT DEFAULT 1,
-    CONSTRAINT suite_type_id_fk FOREIGN KEY (suite_type_id) REFERENCES suite_type (id)
-        ON DELETE SET NULL,
-    CONSTRAINT suite_number_fk CHECK ( suite_number > 1000 AND suite_number < 9999 ),
-    CONSTRAINT suite_status_ck CHECK ( suite_status IN (0, 1))
-);
 
 CREATE VIEW suite_view AS
 SELECT suite_number,
@@ -210,14 +224,6 @@ END;
 
 -- SERVICES BEGIN
 
-CREATE TABLE service
-(
-    id             INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
-    service_name   VARCHAR(255)                     NOT NULL,
-    service_price  FLOAT                            NOT NULL,
-    service_status SMALLINT                         NOT NULL,
-    CONSTRAINT service_status_check CHECK (service_status IN (0, 1))
-);
 
 CREATE PROCEDURE insert_service(
     insert_service_name IN VARCHAR,
@@ -242,26 +248,9 @@ END;
 
 -- RESERVATIONS BEGIN
 
--- DROP TABLE reservation;
 -- DROP TRIGGER reservation_check_dates;
 -- DROP VIEW reservation_client_view;
 -- DROP VIEW reservation_suite_view;
-
-CREATE TABLE reservation
-(
-    id              INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
-    client_passport VARCHAR(16)                      NOT NULL,
-    suite_number    INT                              NOT NULL,
-    arrival         DATE                             NOT NULL,
-    departure       DATE                             NOT NULL,
-    guests_count    INT                              NOT NULL,
-    payment_option  VARCHAR(4)                       NOT NULL,
-    sum             FLOAT                            NOT NULL,
-    CONSTRAINT fk_client FOREIGN KEY (client_passport) REFERENCES client (passport_number),
-    CONSTRAINT fk_suite FOREIGN KEY (suite_number) REFERENCES suite (suite_number),
-    CONSTRAINT fk_payment_check CHECK (payment_option IN ('CASH', 'CARD')),
-    CONSTRAINT fk_arrival_check CHECK (arrival < departure)
-);
 
 CREATE OR REPLACE TRIGGER reservation_check_dates
     BEFORE INSERT OR UPDATE
@@ -345,15 +334,6 @@ END;
 
 -- SERVICE REQUESTS BEGIN
 
-CREATE TABLE service_request
-(
-    id                   INT GENERATED ALWAYS AS IDENTITY NOT NULL PRIMARY KEY,
-    service_request_date DATE                             NOT NULL,
-    service_id           INT                              NOT NULL,
-    reservation_id       INT                              NOT NULL,
-    CONSTRAINT fk_service_id FOREIGN KEY (service_id) REFERENCES service (id),
-    CONSTRAINT fk_reservation_id FOREIGN KEY (reservation_id) REFERENCES reservation (id)
-);
 
 CREATE VIEW service_request_view AS
 SELECT service_request.id,
