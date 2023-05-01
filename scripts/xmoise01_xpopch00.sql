@@ -901,6 +901,87 @@ EXCEPTION
         DBMS_OUTPUT.PUT_LINE('');
 END;
 
+----------------- PROCEDURES WITH CURSOR --------------------------
+
+-- The procedure outputs the number of rooms of the selected type
+CREATE OR REPLACE PROCEDURE count_room_type_of(room_type VARCHAR)
+AS
+    CURSOR cursor_type_id IS SELECT suite_type_id FROM suite;
+    matching_rooms INT;
+    searched_type suite_type.id%type;
+    type_id suite_type.id%type;
+    all_rooms INT;
+BEGIN
+    SELECT COUNT(*) INTO all_rooms FROM suite;
+
+    matching_rooms := 0;
+
+    SELECT id
+    INTO searched_type
+    FROM suite_type
+    WHERE name LIKE room_type;
+
+    OPEN cursor_type_id;
+    LOOP
+        FETCH cursor_type_id INTO type_id;
+            EXIT WHEN cursor_type_id%NOTFOUND;
+        IF type_id = searched_type THEN
+            matching_rooms := matching_rooms + 1;
+        END IF;
+    END LOOP;
+    CLOSE cursor_type_id;
+
+    DBMS_OUTPUT.PUT_LINE('There are ' || matching_rooms || ' rooms type ' || room_type ||
+                         ' of all ' || all_rooms || ' rooms.');
+
+    EXCEPTION WHEN NO_DATA_FOUND THEN
+    BEGIN
+        DBMS_OUTPUT.PUT_LINE('No rooms type ' || room_type || ' in this hotel.');
+    END;
+END;
+-- Running procedure
+BEGIN
+    count_room_type_of('Luxury Apartment');
+END;
+-- The procedure outputs the name of the client who ordered the service by the request number
+CREATE OR REPLACE PROCEDURE  find_client_of_request(
+    searched_service iN VARCHAR,
+    searched_date IN DATE
+)
+AS
+    searched_id service_request.service_id%TYPE;
+    client_lastname VARCHAR2(32);
+    client_name VARCHAR2(32);
+    reservation_of_request INT;
+BEGIN
+    SELECT id INTO searched_id
+    FROM service
+    WHERE service_name LIKE searched_service;
+
+    SELECT reservation_id INTO reservation_of_request
+    FROM service_request
+    WHERE (service_id LIKE searched_id) AND (service_request_date = searched_date);
+
+    SELECT first_name, last_name
+    INTO client_name, client_lastname
+    FROM client c
+    JOIN reservation r on c.passport_number = r.client_passport
+    WHERE r.id = reservation_of_request;
+
+    DBMS_OUTPUT.PUT_LINE( searched_service || ' was ordered by ' || client_name || ' ' ||
+                        client_lastname || ' on the date ' || searched_date || '.' );
+
+    EXCEPTION WHEN NO_DATA_FOUND THEN
+    BEGIN
+        DBMS_OUTPUT.PUT_LINE( searched_service || ' was not ordered on the date ' || searched_date ||
+                              ' or does not exist.' );
+    END;
+END;
+-- Running procedure
+BEGIN
+    find_client_of_request('Breakfast in the room',TO_DATE('02.12.2023','DD.MM.YYYY'));
+END;
+
 EXPLAIN PLAN FOR
 SELECT s.suite_number, st.capacity, COUNT(r.client_passport) AS reservation_quantity
 FROM reservation r
