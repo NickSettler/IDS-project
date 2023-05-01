@@ -933,7 +933,13 @@ GRANT ALL ON suite TO XPOPCH00;
 GRANT ALL ON suite_type TO XPOPCH00;
 GRANT ALL ON suite_type_spec TO XPOPCH00;
 
-GRANT SELECT ON reservation_suite_view TO XPOPCH00;
+CREATE OR REPLACE VIEW XPOPCH00.xmoise01_clients_view
+AS
+    SELECT c.first_name, c.last_name, c.passport_number, c.email, c.phone_number
+    FROM XMOISE01.client c;
+
+SELECT * FROM XPOPCH00.xmoise01_clients_view;
+
 
 -- Select request to display the status of clients' arrivals
 SELECT c.first_name || ' ' || c.last_name ||
